@@ -574,6 +574,461 @@ This test helped demonstrate an important concept in production AI systems:
 This introduced practical experience with **LLM grounding and hallucination control**.
 
 ---
+---
+
+# 🧠 AI Agent with Memory and Tool Calling
+
+## 12. Building a Context-Aware AI Agent
+
+After building the basic Salon AI Assistant using a Basic LLM Chain, I extended my n8n learning by working with an **AI Agent** capable of maintaining conversation context and interacting with external tools.
+
+This exercise introduced three important components of agentic AI workflows:
+
+- AI Agent
+- Conversation Memory
+- Tool Calling
+
+Unlike a basic LLM workflow that follows a direct input-to-output pattern, an AI Agent can decide whether to answer directly using its available context or invoke an external tool to complete an action.
+
+---
+
+## 🏗️ Workflow Architecture
+
+The workflow was built using:
+
+```text
+Chat Trigger
+     ↓
+ AI Agent
+   /  |  \
+  /   |   \
+ ↓    ↓    ↓
+Groq  Simple  HTTP Request
+Chat  Memory     Tool
+Model
+```
+
+### Components
+
+| Component | Purpose |
+|---|---|
+| Chat Trigger | Provides a built-in interface for testing multi-turn conversations |
+| AI Agent | Processes user requests and decides how to respond |
+| Groq Chat Model | Provides the Large Language Model used by the agent |
+| Simple Memory | Maintains conversation context within the current session |
+| HTTP Request Tool | Allows the AI Agent to interact with an external API |
+
+---
+
+# 💬 Multi-Turn Conversation with Memory
+
+The first objective was to understand how an AI Agent maintains context across multiple messages.
+
+The AI Agent was configured as a salon assistant with the following business information:
+
+```text
+You are a WhatsApp assistant for a salon.
+
+The salon is open Monday through Saturday from 10:00 AM to 8:00 PM.
+The salon is closed on Sundays.
+
+Keep responses short, clear, and friendly.
+```
+
+The agent was connected to **Simple Memory**.
+
+### Test Conversation
+
+First message:
+
+```text
+What time do you open on Saturday?
+```
+
+The assistant correctly responded using the provided business information.
+
+The next message was sent within the same conversation session:
+
+```text
+And Sunday?
+```
+
+The AI Agent understood that the second message referred to the previously discussed topic of opening hours.
+
+Conceptually:
+
+```text
+Message 1
+"What time do you open on Saturday?"
+            ↓
+      Simple Memory
+            ↓
+Conversation context retained
+            ↓
+Message 2
+"And Sunday?"
+            ↓
+AI understands the context
+            ↓
+Question interpreted as:
+"What are your opening hours on Sunday?"
+```
+
+This demonstrated how conversation memory enables an AI assistant to handle natural follow-up questions.
+
+---
+
+# 🧠 Understanding Session Memory
+
+I also learned that memory must be associated with the correct conversation session.
+
+Within the same session:
+
+```text
+Previous Messages
+       +
+Current Message
+       ↓
+Simple Memory
+       ↓
+Context-Aware Response
+```
+
+In a new session:
+
+```text
+New Conversation
+       ↓
+No Previous Conversation History
+       ↓
+Fresh Context
+```
+
+This is an important concept for future production chatbot systems.
+
+Incorrect session management could cause:
+
+- Conversation history to be lost
+- Context from unrelated conversations to be mixed
+- One customer's conversation to interfere with another customer's session
+
+Proper session management will therefore be essential when integrating the AI Agent with real messaging platforms.
+
+---
+
+# 🛠️ Giving the AI Agent Tools
+
+The next exercise introduced **Tool Calling**.
+
+An **HTTP Request Tool** was connected to the AI Agent.
+
+For testing purposes, the tool called a free public joke API.
+
+The tool was configured with a clear description explaining when the AI Agent should use it.
+
+Example tool description:
+
+```text
+Use this tool to fetch a random joke when the user asks for a joke.
+Always use this tool when a joke is requested instead of creating a joke yourself.
+```
+
+The AI Agent system instructions were updated so that joke requests should use the available tool.
+
+---
+
+# 🔧 Understanding Tool Calling
+
+When the user sends:
+
+```text
+Tell me a joke.
+```
+
+The workflow conceptually operates as:
+
+```text
+User Request
+     ↓
+AI Agent
+     ↓
+Analyzes User Intent
+     ↓
+Determines Tool Is Required
+     ↓
+HTTP Request Tool
+     ↓
+External API
+     ↓
+API Response
+     ↓
+AI Agent
+     ↓
+Final User-Friendly Response
+```
+
+The AI Agent successfully invoked the HTTP Request Tool before generating its final response.
+
+This demonstrated an important difference between a normal chatbot and an AI Agent.
+
+A normal LLM primarily generates text:
+
+```text
+User
+  ↓
+LLM
+  ↓
+Generated Response
+```
+
+An AI Agent can decide to perform actions:
+
+```text
+User
+  ↓
+AI Agent
+  ↓
+Decision
+ /      \
+↓        ↓
+Answer   Use Tool
+Directly    ↓
+         External System
+             ↓
+           Result
+             ↓
+       Final Response
+```
+
+---
+
+# 📝 Importance of Tool Descriptions
+
+One important lesson from this exercise was that an AI Agent relies on the tool description to understand when and why a tool should be used.
+
+A vague description such as:
+
+```text
+Gets data
+```
+
+does not provide enough information.
+
+A better description clearly defines:
+
+1. What the tool does
+2. When the agent should use it
+
+Example:
+
+```text
+Use this tool to fetch a random joke when the user asks for a joke.
+```
+
+Clear tool descriptions improve the reliability of agent tool selection.
+
+---
+
+# 💇 Salon AI Agent with Memory and Tool Calling
+
+The concepts of AI Agents, Memory, and Tool Calling were then combined with the previous Salon AI Assistant project.
+
+The resulting architecture represents a more advanced version of the original assistant.
+
+```text
+Customer Message
+       ↓
+Chat Trigger
+       ↓
+AI Agent
+   /    |     \
+  ↓     ↓      ↓
+Groq  Simple  Availability
+Model  Memory    Tool
+```
+
+The AI Agent was grounded with salon business information:
+
+```text
+Salon Hours:
+Monday-Saturday: 10:00 AM-8:00 PM
+Sunday: Closed
+```
+
+The agent could:
+
+- Answer questions about salon opening hours
+- Understand follow-up questions using conversation memory
+- Maintain context during a conversation
+- Recognize requests that require an external action
+- Decide when to invoke an available tool
+
+---
+
+# 📅 Simulated Appointment Availability Tool
+
+For learning purposes, an HTTP Request Tool was configured as a simulated appointment availability checker.
+
+The tool description instructed the AI Agent to use it when a customer asked about appointment availability or attempted to book an appointment.
+
+Example:
+
+```text
+Checks appointment slot availability.
+
+Use this tool whenever a customer asks to book an appointment or asks whether an appointment slot is available.
+
+This is a simulated tool for learning purposes.
+```
+
+> Note: The API used during this exercise does not provide real salon appointment availability. It was used only to understand and test the AI Agent's tool-calling behavior.
+
+A real production system would replace this simulated tool with an actual appointment system, database, or calendar API.
+
+---
+
+# 🧪 Multi-Turn Agent Test
+
+The combined workflow was tested using a multi-turn conversation.
+
+### Message 1 — Business Information
+
+```text
+What time do you open on Saturday?
+```
+
+Expected behavior:
+
+```text
+AI Agent answers directly using its business knowledge.
+```
+
+---
+
+### Message 2 — Contextual Follow-Up
+
+```text
+And Sunday?
+```
+
+Expected behavior:
+
+```text
+AI Agent uses conversation context and Simple Memory to understand that the customer is still asking about opening hours.
+```
+
+---
+
+### Message 3 — Appointment Request
+
+```text
+I'd like to book an appointment for Saturday.
+```
+
+Expected behavior:
+
+```text
+AI Agent recognizes that the request requires checking appointment availability.
+        ↓
+AI Agent invokes the availability tool.
+```
+
+This demonstrated how a single AI Agent can combine:
+
+```text
+Business Knowledge
+       +
+Conversation Memory
+       +
+Intent Recognition
+       +
+Tool Calling
+       ↓
+Context-Aware AI Automation
+```
+
+---
+
+# 💡 Key Concepts Learned
+
+Through this exercise, I gained practical experience with:
+
+- n8n AI Agent workflows
+- Chat Trigger
+- Groq Chat Model integration
+- Simple Memory
+- Multi-turn conversations
+- Conversation context
+- Session-based memory
+- AI Agent decision-making
+- HTTP Request Tools
+- Tool descriptions
+- External API integration
+- Agentic tool calling
+- Intent-based tool selection
+- Simulated appointment availability workflows
+
+---
+
+# 🚀 Evolution of the Project
+
+The project has progressed through multiple stages.
+
+### Stage 1 — Basic API Integration
+
+```text
+Manual Trigger
+      ↓
+HTTP Request
+      ↓
+Groq API
+      ↓
+AI Response
+```
+
+### Stage 2 — Basic AI Assistant
+
+```text
+Manual Trigger
+      ↓
+Customer Question
+      ↓
+Basic LLM Chain
+      ↓
+Groq Chat Model
+      ↓
+Clean Reply
+```
+
+### Stage 3 — Context-Aware AI Agent
+
+```text
+Chat Trigger
+      ↓
+AI Agent
+   /    |    \
+Groq  Memory  Tools
+```
+
+The next stages will focus on replacing simulated components with real business integrations.
+
+Potential future improvements include:
+
+- WhatsApp Cloud API integration
+- Real appointment availability checking
+- Google Calendar integration
+- Appointment booking
+- Customer-specific session management
+- Customer database integration
+- Lead capture
+- Lead qualification
+- Human agent handoff
+- Persistent conversation memory
+- Production deployment
+
+This represents another step toward building a complete **AI-powered automation system for local and small businesses**.
+
+---
 
 # 💡 Key Concepts Learned
 
@@ -784,8 +1239,10 @@ AI Response Extraction       ✅
 Groq Chat Model              ✅
 Basic LLM Chain              ✅
 JSON-Formatted AI Output     ✅
+Salon AI Assistant           ✅ 
+Salon AI Agent               ✅
 
-Salon AI Assistant           ✅ Completed
+Real Appointment Integration ⏳ Planned
 WhatsApp Integration         ⏳ Planned
 Lead Capture System          ⏳ Planned
 Lead Qualification           ⏳ Planned
