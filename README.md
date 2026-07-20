@@ -946,6 +946,787 @@ Tool Calling
        ↓
 Context-Aware AI Automation
 ```
+---
+
+# 🌐 Production-Style Webhook AI Assistant with Google Sheets Logging
+
+## 13. Moving from Chat Trigger to Webhook
+
+After building and testing the Salon AI Agent using n8n's Chat Trigger, I rebuilt the workflow using a **Webhook Trigger**.
+
+The Chat Trigger is useful for testing AI conversations inside n8n, but real messaging platforms communicate with automation systems through APIs and webhooks.
+
+This workflow represents a more production-oriented architecture that can later be connected to services such as WhatsApp Cloud API.
+
+The new workflow can:
+
+- Receive customer messages through an HTTP POST webhook
+- Extract customer phone numbers and messages
+- Validate incoming messages
+- Process valid messages using an AI Agent
+- Maintain separate conversation memory for each customer
+- Return AI-generated responses through the webhook
+- Log customer conversations in Google Sheets
+- Detect and handle empty messages without calling the AI model
+
+---
+
+# 🏗️ Workflow Architecture
+
+The completed workflow follows this architecture:
+
+```text
+Webhook (POST)
+      ↓
+Extract Customer Message
+(Edit Fields)
+      ↓
+Validate Message
+(IF)
+   /       \
+TRUE       FALSE
+ ↓           ↓
+AI Agent   Empty Message Reply
+ /   \          ↓
+↓     ↓     Respond to Webhook
+Groq  Simple       ↓
+Model Memory   Google Sheets Log
+ ↓
+Respond to Webhook
+ ↓
+Google Sheets Log
+```
+
+This workflow combines:
+
+```text
+Webhook APIs
+      +
+Input Validation
+      +
+AI Agent
+      +
+Conversation Memory
+      +
+Session Isolation
+      +
+Google Sheets Logging
+```
+
+---
+
+# 📩 Receiving Customer Messages with a Webhook
+
+The workflow begins with an n8n **Webhook** node configured to accept:
+
+```text
+POST
+```
+
+For local testing, requests were sent to the n8n test webhook endpoint.
+
+A simulated incoming customer payload followed this structure:
+
+```json
+{
+  "from": "919800000001",
+  "message": "What time do you open Saturday?"
+}
+```
+
+This structure represents a simplified version of the type of payload that could eventually be received from a messaging platform.
+
+---
+
+# 🧹 Extracting Customer Data
+
+An **Edit Fields (Set)** node was used to extract the required information from the incoming webhook payload.
+
+Two fields were created:
+
+```text
+phone
+customer_message
+```
+
+The phone number was extracted using:
+
+```text
+{{ $json.body.from }}
+```
+
+The customer message was extracted using:
+
+```text
+{{ $json.body.message }}
+```
+
+The resulting data structure was:
+
+```json
+{
+  "phone": "919800000001",
+  "customer_message": "What time do you open Saturday?"
+}
+```
+
+This step separates the required business data from the complete incoming webhook payload.
+
+---
+
+# ✅ Validating Incoming Messages
+
+An **IF node** was added before the AI Agent.
+
+The purpose of this node is to check whether:
+
+```text
+customer_message
+```
+
+is empty.
+
+The workflow branches into two paths:
+
+```text
+Validate Message
+      |
+   ┌──┴──┐
+   ↓     ↓
+ TRUE   FALSE
+```
+
+### TRUE Branch
+
+If a customer message exists:
+
+```text
+AI Agent
+   ↓
+Generate Response
+   ↓
+Respond to Webhook
+   ↓
+Log Conversation
+```
+
+### FALSE Branch
+
+If the customer message is empty:
+
+```text
+Empty Message Reply
+   ↓
+Respond to Webhook
+   ↓
+Log Empty Message
+```
+
+This prevents unnecessary AI API calls when no valid message has been provided.
+
+---
+
+# 🤖 Processing Messages with the Salon AI Agent
+
+Valid customer messages are passed to the **Salon AI Agent**.
+
+The AI Agent uses:
+
+- Groq Chat Model
+- Llama 3.3 70B Versatile
+- Simple Memory
+- Business-specific system instructions
+
+The incoming customer message is dynamically provided to the Agent.
+
+Conceptually:
+
+```text
+Webhook Request
+      ↓
+Extract Message
+      ↓
+Validate Message
+      ↓
+AI Agent
+      ↓
+Groq Chat Model
+      ↓
+AI Response
+```
+
+The AI Agent is grounded with the salon's business information.
+
+```text
+The salon is open Monday through Saturday from 10:00 AM to 8:00 PM.
+
+The salon is closed on Sundays.
+```
+
+This allows the assistant to answer questions such as:
+
+```text
+What time do you open Saturday?
+```
+
+with a response similar to:
+
+```text
+We're open from 10 AM to 8 PM on Saturday.
+```
+
+---
+
+# 🧠 Phone-Number-Based Conversation Memory
+
+One of the most important improvements in this workflow was configuring conversation memory using the customer's phone number.
+
+Instead of using one shared memory session, each customer receives an independent conversation session.
+
+Conceptually:
+
+```text
+Customer A
+Phone: 919800000001
+       ↓
+Memory Session A
+
+
+Customer B
+Phone: 919800000002
+       ↓
+Memory Session B
+```
+
+The phone number extracted from the webhook is used as the session identifier for **Simple Memory**.
+
+This ensures that:
+
+- Each customer has separate conversation history
+- Follow-up questions retain context
+- Conversations from different customers do not mix
+- Customer sessions remain isolated
+
+---
+
+# 🧪 Testing Conversation Memory
+
+Session memory was tested using multiple webhook requests.
+
+### Customer A — First Message
+
+```text
+My name is Nagendra.
+```
+
+The message was sent using:
+
+```text
+phone = 919800000001
+```
+
+### Customer A — Follow-Up
+
+Using the same phone number:
+
+```text
+What is my name?
+```
+
+The AI Agent correctly remembered:
+
+```text
+Nagendra
+```
+
+This confirmed that memory persisted for the same session identifier.
+
+---
+
+# 🔒 Testing Session Isolation
+
+A second simulated customer was created using:
+
+```text
+phone = 919800000002
+```
+
+The second customer asked:
+
+```text
+What is my name?
+```
+
+The AI Agent did not inherit the conversation history of Customer A.
+
+This demonstrated proper session isolation.
+
+Conceptually:
+
+```text
+919800000001
+      ↓
+Memory A
+      ↓
+Knows "Nagendra"
+
+
+919800000002
+      ↓
+Memory B
+      ↓
+Separate Conversation
+```
+
+This is an important requirement for production chatbot systems where multiple customers may interact with the assistant simultaneously.
+
+---
+
+# 📤 Responding to Webhook Requests
+
+After generating the AI response, the workflow uses the **Respond to Webhook** node.
+
+The AI Agent's generated output is returned as a structured response.
+
+Example:
+
+```json
+{
+  "reply": "We're open from 10 AM to 8 PM on Saturday."
+}
+```
+
+This architecture allows an external application to:
+
+```text
+Send HTTP Request
+      ↓
+n8n Webhook
+      ↓
+AI Processing
+      ↓
+HTTP Response
+```
+
+In the future, the external application can be replaced with a real messaging service such as WhatsApp Cloud API.
+
+---
+
+# 📊 Google Sheets Conversation Logging
+
+Google Sheets was integrated into the workflow as a lightweight conversation logging system.
+
+A spreadsheet named:
+
+```text
+Salon AI Assistant Logs
+```
+
+was created.
+
+The logging structure contains the following columns:
+
+```text
+timestamp
+phone
+customer_message
+bot_reply
+note
+```
+
+Example:
+
+| timestamp | phone | customer_message | bot_reply | note |
+|---|---|---|---|---|
+| Current timestamp | 919800000001 | What time do you open Saturday? | We're open from 10 AM to 8 PM on Saturday. | normal message |
+
+Each successful customer interaction creates a new row in Google Sheets.
+
+---
+
+# 🔐 Google OAuth Integration
+
+Because n8n is running locally using Docker, Google OAuth credentials were configured through Google Cloud.
+
+The setup involved:
+
+- Creating a Google Cloud project
+- Enabling Google Sheets API
+- Enabling Google Drive API
+- Configuring the OAuth consent screen
+- Creating OAuth 2.0 credentials
+- Configuring the n8n OAuth redirect URI
+- Adding a test user
+- Connecting the Google account to n8n
+
+This allowed the self-hosted n8n instance to securely interact with Google Sheets.
+
+> OAuth Client Secrets and API credentials are never stored in this GitHub repository.
+
+---
+
+# 📝 Logging AI Conversations
+
+For normal customer messages, the Google Sheets node appends:
+
+```text
+timestamp          → Current timestamp
+phone              → Customer phone number
+customer_message   → Incoming customer message
+bot_reply          → AI-generated response
+note               → normal message
+```
+
+This creates a simple conversation history that can later be used for:
+
+- Monitoring chatbot interactions
+- Debugging workflows
+- Understanding customer questions
+- Identifying common customer requests
+- Basic analytics
+
+---
+
+# ⚠️ Empty Message Handling
+
+The workflow also handles invalid requests where the customer message is empty.
+
+Example payload:
+
+```json
+{
+  "from": "919800000001",
+  "message": ""
+}
+```
+
+Instead of sending this request to the AI Agent, the IF node routes it through the FALSE branch.
+
+```text
+Empty Customer Message
+       ↓
+IF Validation
+       ↓ FALSE
+Empty Message Reply
+       ↓
+Respond to Webhook
+```
+
+The response is:
+
+```json
+{
+  "reply": "Please send your question"
+}
+```
+
+The AI Agent is completely skipped.
+
+This avoids:
+
+- Unnecessary AI API calls
+- Wasted tokens
+- Invalid LLM requests
+- Unnecessary processing
+
+---
+
+# 📊 Logging Empty Messages
+
+Empty messages are also logged in Google Sheets.
+
+Example:
+
+| timestamp | phone | customer_message | bot_reply | note |
+|---|---|---|---|---|
+| Current timestamp | 919800000001 | | Please send your question | empty message received |
+
+The note:
+
+```text
+empty message received
+```
+
+makes it easy to distinguish invalid requests from normal customer conversations.
+
+---
+
+# 🧪 Workflow Testing
+
+The completed workflow was tested with multiple scenarios.
+
+## Test 1 — Normal Customer Message
+
+Input:
+
+```json
+{
+  "from": "919800000001",
+  "message": "What time do you open Saturday?"
+}
+```
+
+Expected behavior:
+
+```text
+Webhook
+   ↓
+Extract Message
+   ↓
+IF → TRUE
+   ↓
+AI Agent
+   ↓
+Respond to Webhook
+   ↓
+Google Sheets Log
+```
+
+Result:
+
+```text
+Passed ✅
+```
+
+---
+
+## Test 2 — Conversation Memory
+
+First message:
+
+```text
+My name is Nagendra.
+```
+
+Follow-up:
+
+```text
+What is my name?
+```
+
+Both requests used the same phone number.
+
+Result:
+
+```text
+AI Agent remembered the conversation context.
+```
+
+```text
+Passed ✅
+```
+
+---
+
+## Test 3 — Session Isolation
+
+A different phone number was used to start another conversation.
+
+The second session did not inherit the first customer's conversation history.
+
+Result:
+
+```text
+Customer conversations remained isolated.
+```
+
+```text
+Passed ✅
+```
+
+---
+
+## Test 4 — Google Sheets Logging
+
+A normal webhook request was executed.
+
+The following information was successfully added to Google Sheets:
+
+```text
+timestamp
+phone
+customer_message
+bot_reply
+note
+```
+
+Result:
+
+```text
+Passed ✅
+```
+
+---
+
+## Test 5 — Empty Message Validation
+
+Input:
+
+```json
+{
+  "from": "919800000001",
+  "message": ""
+}
+```
+
+The workflow:
+
+- Detected the empty message
+- Skipped the AI Agent
+- Returned "Please send your question"
+- Logged the request in Google Sheets
+- Tagged the log as "empty message received"
+
+Result:
+
+```text
+Passed ✅
+```
+
+---
+
+# 💡 Key Concepts Learned
+
+Through this project, I gained practical experience with:
+
+- Production-style webhook workflows
+- HTTP POST requests
+- JSON webhook payloads
+- Dynamic field extraction
+- n8n expressions
+- IF-based input validation
+- AI Agent integration
+- Groq Chat Model integration
+- Session-based conversation memory
+- Phone-number-based session identifiers
+- Customer conversation isolation
+- Respond to Webhook nodes
+- Structured JSON responses
+- Google Sheets integration
+- Google OAuth 2.0 configuration
+- Google Sheets API
+- Google Drive API
+- Conversation logging
+- Error handling
+- Defensive workflow design
+- Avoiding unnecessary LLM API calls
+
+---
+
+# 🚀 Project Evolution
+
+The project has evolved through several stages:
+
+### Stage 1 — Raw AI API Call
+
+```text
+Manual Trigger
+      ↓
+HTTP Request
+      ↓
+Groq API
+      ↓
+AI Response
+```
+
+### Stage 2 — Basic Salon AI Assistant
+
+```text
+Manual Trigger
+      ↓
+Customer Question
+      ↓
+Basic LLM Chain
+      ↓
+Groq Chat Model
+      ↓
+Clean Reply
+```
+
+### Stage 3 — AI Agent with Memory and Tools
+
+```text
+Chat Trigger
+      ↓
+AI Agent
+   /    |    \
+Groq  Memory  Tools
+```
+
+### Stage 4 — Production-Style Webhook AI Assistant
+
+```text
+Webhook
+   ↓
+Extract Data
+   ↓
+Validate Input
+   ↓
+AI Agent
+   ↓
+Phone-Based Memory
+   ↓
+Respond to Webhook
+   ↓
+Google Sheets Logging
+```
+
+The project is gradually moving toward a complete real-world architecture:
+
+```text
+Customer
+   ↓
+WhatsApp
+   ↓
+WhatsApp Cloud API
+   ↓
+Webhook
+   ↓
+n8n
+   ↓
+Input Validation
+   ↓
+AI Agent
+   ├── Business Knowledge
+   ├── Customer Memory
+   └── Business Tools
+   ↓
+Response
+   ↓
+WhatsApp Cloud API
+   ↓
+Customer
+
+      +
+      
+Google Sheets / Database
+Conversation Logging
+```
+
+---
+
+# 🔮 Future Improvements
+
+Future development will focus on:
+
+- WhatsApp Cloud API integration
+- Real incoming WhatsApp messages
+- Sending AI replies through WhatsApp
+- Persistent production-grade memory
+- Real appointment availability checking
+- Google Calendar integration
+- Automated appointment booking
+- Customer database integration
+- Lead capture
+- Lead qualification
+- Human agent handoff
+- Better error handling
+- Retry mechanisms
+- Production deployment
+- Monitoring and analytics
+
+This milestone represents the transition from a simple AI chatbot experiment toward a more structured **AI-powered business automation system** built with n8n.
+
 
 ---
 
@@ -1223,30 +2004,75 @@ The focus is on building practical, deployable automation systems that solve rea
 
 ---
 
-# 📈 Progress
+# 📈 Learning Progress
+
+### 🟢 Core n8n & Automation
 
 ```text
-n8n Fundamentals             ✅
-Docker + WSL2 Setup          ✅
-Edit Fields / Set            ✅
-Conditional Logic            ✅
-HTTP Requests                ✅
-REST API Integration         ✅
-Webhooks                     ✅
-Groq API Integration         ✅
-LLM API Calls                ✅
-AI Response Extraction       ✅
-Groq Chat Model              ✅
-Basic LLM Chain              ✅
-JSON-Formatted AI Output     ✅
-Salon AI Assistant           ✅ 
-Salon AI Agent               ✅
+n8n Fundamentals                  ✅
+Docker + WSL2 Local Setup         ✅
+Edit Fields / Data Transformation ✅
+Conditional Logic (IF)            ✅
+HTTP Requests                     ✅
+REST API Integration              ✅
+Webhook Workflows                 ✅
+Input Validation                  ✅
+```
 
-Real Appointment Integration ⏳ Planned
-WhatsApp Integration         ⏳ Planned
-Lead Capture System          ⏳ Planned
-Lead Qualification           ⏳ Planned
-Production Deployment        ⏳ Planned
+### 🤖 AI & LLM Integration
+
+```text
+Groq API Integration              ✅
+LLM API Calls                     ✅
+AI Response Extraction            ✅
+JSON-Formatted AI Output          ✅
+Groq Chat Model                   ✅
+Basic LLM Chain                   ✅
+Salon AI Assistant                ✅
+```
+
+### 🧠 AI Agents & Memory
+
+```text
+AI Agent Fundamentals             ✅
+Simple Memory                     ✅
+Multi-Turn Conversations          ✅
+Session-Based Memory              ✅
+AI Agent Tool Calling             ✅
+HTTP Request Tools                ✅
+Salon AI Agent                    ✅
+```
+
+### 🌐 Production-Style Automation
+
+```text
+Webhook-Based AI Agent            ✅
+Phone-Based Session Memory        ✅
+Customer Session Isolation        ✅
+Empty Message Validation          ✅
+Structured Webhook Responses      ✅
+```
+
+### 📊 Google Integration & Logging
+
+```text
+Google OAuth 2.0 Integration      ✅
+Google Sheets Integration         ✅
+Conversation Logging              ✅
+Invalid Request Logging           ✅
+```
+
+### 🚀 Next Steps
+
+```text
+WhatsApp Cloud API Integration    ⏳ Planned
+Real Appointment Integration      ⏳ Planned
+Google Calendar Integration       ⏳ Planned
+Lead Capture System               ⏳ Planned
+Lead Qualification                ⏳ Planned
+Persistent Conversation Memory    ⏳ Planned
+Human Agent Handoff               ⏳ Planned
+Production Deployment             ⏳ Planned
 ```
 
 ---
