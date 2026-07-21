@@ -1,0 +1,520 @@
+{
+  "name": "Salon AI Agent - Webhook Production",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salon-assistant",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7455a3f4-5a82-44db-be8c-e0e384ac0b36",
+      "name": "Webhook",
+      "webhookId": "45a66ddb-7238-4768-b366-ea8b8305b323"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f66f1807-d26e-4671-98ad-1d7a4074e8e7",
+              "leftValue": "={{ $json.customer_message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "20f6da2d-64bb-449f-9523-13707224bbaa",
+      "name": "Validate Message"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "72eca0e2-2a5c-495f-b47b-1faecaad2a3c",
+              "name": "phone",
+              "value": "={{ $json.body.from }}",
+              "type": "string"
+            },
+            {
+              "id": "8cd62478-b329-4236-b229-1b6a778aed92",
+              "name": "customer_message",
+              "value": "={{ $json.body.message }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "58f7f8e9-398e-465f-bf4e-e7dd210b323c",
+      "name": "Extract Customer Message"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.customer_message }}",
+        "options": {
+          "systemMessage": "You are a friendly WhatsApp assistant for a salon.\n\nBUSINESS INFORMATION:\n- The salon is open Monday through Saturday from 10:00 AM to 8:00 PM.\n- The salon is closed on Sundays.\n\nRULES:\n- Answer questions about salon opening hours using only the business information provided.\n- Do not invent business information.\n- Remember the context of the current customer's conversation.\n- Keep responses short, clear, and friendly for WhatsApp."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        688,
+        -16
+      ],
+      "id": "accf22d0-c0b2-4bd0-be22-a38a1b087c55",
+      "name": "Salon AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "=llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        624,
+        224
+      ],
+      "id": "c44d24e5-77b1-4a7a-8125-e950356f9b6c",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "7x4BkrEachzLoMNt",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Customer Message').item.json.phone }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        784,
+        240
+      ],
+      "id": "c783edd6-c033-4bc8-a8df-8545933133aa",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"reply\": $json.output } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1008,
+        -16
+      ],
+      "id": "fef87e93-9331-4b48-82a1-8ef560911353",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "599fd0f8-a363-42ec-adee-758d868a3328",
+              "name": "output",
+              "value": "please send your question",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        464
+      ],
+      "id": "e520f179-870f-490d-a35b-9a22b1cefce4",
+      "name": "Empty Message Reply"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"reply\": $json.output } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        688,
+        464
+      ],
+      "id": "f969b368-a767-49a3-8af8-49553e7fdd9a",
+      "name": "Respond Empty Message"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM",
+          "mode": "list",
+          "cachedResultName": "Salon AI Assistant Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now }}",
+            "customer_message": "={{ $('Extract Customer Message').item.json.customer_message }}",
+            "phone": "={{ $('Extract Customer Message').item.json.phone }}",
+            "bot_reply": "=Please send your question",
+            "note": "empty message received"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "bot_reply",
+              "displayName": "bot_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        464
+      ],
+      "id": "dcec17e6-f7db-44a9-8085-c97d9b87c5ce",
+      "name": "Log Empty Message",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XUwVxWIXbPAyG2Dz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM",
+          "mode": "list",
+          "cachedResultName": "Salon AI Assistant Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Logs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Vu4DaVzVl57jEZ5j6tvYitUxaT-rcpkOTkixIvodwPM/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now }}",
+            "phone": "={{ $('Extract Customer Message').item.json.phone }}",
+            "customer_message": "={{ $('Extract Customer Message').item.json.customer_message }}",
+            "bot_reply": "={{ $('Salon AI Agent').item.json.output }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bot_reply",
+              "displayName": "bot_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1216,
+        -16
+      ],
+      "id": "d0c6dc1f-cc08-44cd-8082-288452cbeb2c",
+      "name": "Log Conversation",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XUwVxWIXbPAyG2Dz",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"reply\": \"Please send your question.\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        336
+      ],
+      "id": "cc9f51fb-c4c8-4033-a8b3-a8e39e5f245c",
+      "name": "Handle Empty Message"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Customer Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Customer Message": {
+      "main": [
+        [
+          {
+            "node": "Validate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Message": {
+      "main": [
+        [
+          {
+            "node": "Salon AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Empty Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Salon AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Salon AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salon AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Empty Message Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond Empty Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Empty Message": {
+      "main": [
+        [
+          {
+            "node": "Log Empty Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Empty Message": {
+      "main": [
+        [
+          {
+            "node": "Empty Message Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "cf144d0d-dcef-4879-b19f-fa8c801d155f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f5e6ee6c27b3f13c18d158708ef5c76554d1a68f85a724917aa6c2dd0656d868"
+  },
+  "nodeGroups": [],
+  "id": "G8BDmdlcqelo46qr",
+  "tags": []
+}
